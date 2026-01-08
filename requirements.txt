@@ -1,0 +1,4 @@
+selenium
+selenium-stealth
+webdriver-manager
+easyocr
