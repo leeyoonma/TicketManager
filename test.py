@@ -1,15 +1,16 @@
 import time
 from datetime import datetime
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
+import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from webdriver_manager.chrome import ChromeDriverManager
-from selenium_stealth import stealth
 import easyocr
 import os 
 from dotenv import load_dotenv
+import ssl
+import certifi
+
+ssl._create_default_https_context = ssl._create_unverified_context
 
 load_dotenv()
 
@@ -18,21 +19,11 @@ OPEN_TIME = os.getenv("OPEN_TIME")
 SEAT_COLOR = os.getenv("SEAT_COLOR")
 
 def setup_driver():
-    options = webdriver.ChromeOptions()
+    options = uc.ChromeOptions()
     options.add_argument("--start-maximized")
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option('useAutomationExtension', False)
+    options.add_argument("--disable-blink-features=AutomationControlled")
     
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-    
-    stealth(driver,
-        languages=["ko-KR", "ko"],
-        vendor="Google Inc.",
-        platform="Win32",
-        webgl_vendor="Intel Inc.",
-        renderer="Intel Iris OpenGL Engine",
-        fix_hairline=True,
-    )
+    driver = uc.Chrome(options=options, version_main=None, use_subprocess=True)
     return driver
 
 def login_and_wait(driver):
@@ -118,7 +109,7 @@ def booking_process(driver):
 # --- 실행 ---
 driver = setup_driver()
 try:
-    # login_and_wait(driver)
+    login_and_wait(driver)
     wait_for_open(driver, OPEN_TIME, TARGET_URL)
     booking_process(driver)
 finally:

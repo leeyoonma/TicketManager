@@ -1,4 +1,4 @@
 selenium
-selenium-stealth
-webdriver-manager
+undetected-chromedriver
 easyocr
+python-dotenv
