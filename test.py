@@ -101,7 +101,6 @@ def setup_driver():
     return driver
 
 def login_and_wait(driver, username, password):
-    # 로그인 페이지로 이동
     driver.get("https://ticket.interpark.com/Gate/TPLogin.asp")
     driver.find_element(By.XPATH, '//*[@id="__next"]/div/div/div/div[2]/div[1]/div/div/div/div/div[2]/button[2]').click()
     driver.switch_to.window(driver.window_handles[-1])
@@ -113,18 +112,26 @@ def login_and_wait(driver, username, password):
     userPw.send_keys(Keys.ENTER)
     
     print("로그인 처리 중...")
-    userPw.send_keys(password)
-    time.sleep(20) 
-    driver.find_element(By.XPATH, '//*[@id="log.login"]').click()
-    print("로그인 버튼 클릭")
+
+    try: 
+      time.sleep(2)
+      userPw = driver.find_element(By.XPATH, '//*[@id="pw"]')
+      userPw.send_keys(password)
+      time.sleep(20) 
+      driver.find_element(By.XPATH, '//*[@id="log.login"]').click()
+      print("로그인 버튼 클릭")
+    except:
+      print("네이버 로그인 처리중")
     
-    # 첫 번째 탭(인터파크 메인)으로 전환
+    # 로그인 완료 대기 후 메인 페이지로 이동
+    time.sleep(1)
     driver.switch_to.window(driver.window_handles[0])
     print("로그인 성공! 메인 페이지로 이동")
-
+    
     time.sleep(2)
     print("공연 페이지로 이동 중...")
     driver.get(TARGET_URL)
+    print("공연 페이지 진입 완료")
 
     # time.sleep(2)
     # driver.find_element(By.XPATH, '//*[@id="ticketContent"]/div[2]/ul/li/a').click()
@@ -140,7 +147,6 @@ def wait_for_open(driver, target_time):
         now = datetime.now().strftime("%H:%M:%S")
         if now >= target_time:
             driver.find_element(By.CSS_SELECTOR, '.sideBtn.is-primary').click()
-             # WebDriverWait(driver, 10).until(lambda d: len(d.window_handles) > 1)
             driver.switch_to.window(driver.window_handles[-1])
             print(f"정각 진입 시도: {now}")
             break
@@ -148,48 +154,46 @@ def wait_for_open(driver, target_time):
 
 def booking_process(driver):
     reader = easyocr.Reader(['en'])
+    
+    print('보안문자 대기 중...')
+    wait = WebDriverWait(driver, 30)
+    captcha_img_element = wait.until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, "img[alt*='캡챠 이미지']"))
+    )
+    print("보안문자 캡쳐 완료")
 
-    try:
-        print('보안문자 캡쳐중')
-        # alt 속성으로 이미지 찾기 (더 안정적)
-        captcha_img_element = driver.find_element(By.CSS_SELECTOR, "img[alt*='캡챠 이미지']")
-        print("보안문자 캡쳐 완료")
-
-        max_attempts = 5
-        for attempt in range(max_attempts):
-            print(f"보안문자 인식 시도 {attempt + 1}/{max_attempts}")
-            captcha_img_element.screenshot("captcha.png")
-            result = reader.readtext("captcha.png", detail=0)
-            captcha_text = "".join(result).replace(" ", "").upper() 
-            
-            print(f"인식된 보안문자: {captcha_text}")
-            input_field = driver.find_element(By.XPATH, "//*[@id=\"__next\"]/div[2]/div/div/div/div/input")
-            input_field.clear() 
-            input_field.send_keys(captcha_text)
-            driver.find_element(By.XPATH, "//*[@id=\"__next\"]/div[2]/div/footer/button").click()
-            print(f"보안문자 입력 완료: {captcha_text}")
-            
-            time.sleep(1)
-            
-            try:
-                error_display = driver.find_element(By.XPATH, '//*[@id="__next"]/div[2]/div/div/div/div/div[2]')
-                if error_display.is_displayed():
-                    print("보안문자 처리 실패, 재시도...")
-                    driver.find_element(By.XPATH, "//*[@id=\"__next\"]/div[2]/div/div/div/div/div[1]/button[2]").click()
-                    time.sleep(0.5)
-                    captcha_img_element = driver.find_element(By.CSS_SELECTOR, "img[alt*='캡챠 이미지']")
-                    continue
-            except:
-                print("보안문자 처리 성공")
-                break
-                
-    except Exception as e:
-        print(f"캡차 없음 또는 오류: {e}")
-
+    while captcha_img_element:
+      captcha_img_element.screenshot("captcha.png")
+      result = reader.readtext("captcha.png", detail=0)
+      captcha_text = "".join(result).replace(" ", "").upper() 
+      
+      print(f"인식된 보안문자: {captcha_text}")
+      input_field = driver.find_element(By.XPATH, "//*[@id=\"__next\"]/div[2]/div/div/div/div/input")
+      input_field.clear() 
+      input_field.send_keys(captcha_text)
+      driver.find_element(By.XPATH, "//*[@id=\"__next\"]/div[2]/div/footer/button").click()
+      
+      # 처리 결과 대기
+      time.sleep(0.2)
+      
+      try:
+          error_msg = driver.find_element(By.XPATH, '//*[@id="__next"]/div[2]/div/div/div/div/div[2]')
+          if error_msg.is_displayed() or len(captcha_text) != 6:
+              print("보안문자 오류, 재시도합니다.")
+              driver.find_element(By.XPATH, '//*[@id="__next"]/div[2]/div/div/div/div/div[1]/button[2]').click()
+              time.sleep(0.5)
+              captcha_img_element = wait.until(
+                  EC.presence_of_element_located((By.CSS_SELECTOR, "img[alt*='캡챠 이미지']"))
+              )
+              continue
+      except:
+          print(f"보안문자 입력 완료: {captcha_text}")
+          break
     
     while True:
         try:
-            seats = driver.find_elements(By.CSS_SELECTOR, f"circle[fill='{SEAT_COLOR}']")
+            print("좌석 선택 시도 중...")
+            seats = wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, f"circle[fill='{SEAT_COLOR}']")))
             
             if seats:
                 seats[0].click()
