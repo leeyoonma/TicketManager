@@ -117,7 +117,7 @@ def login_and_wait(driver, username, password):
       time.sleep(2)
       userPw = driver.find_element(By.XPATH, '//*[@id="pw"]')
       userPw.send_keys(password)
-      time.sleep(20) 
+      time.sleep(15) 
       driver.find_element(By.XPATH, '//*[@id="log.login"]').click()
       print("로그인 버튼 클릭")
     except:
@@ -132,13 +132,6 @@ def login_and_wait(driver, username, password):
     print("공연 페이지로 이동 중...")
     driver.get(TARGET_URL)
     print("공연 페이지 진입 완료")
-
-    # time.sleep(2)
-    # driver.find_element(By.XPATH, '//*[@id="ticketContent"]/div[2]/ul/li/a').click()
-    # driver.switch_to.window(driver.window_handles[-1])
-    # print("티켓팅 페이지에 진입했습니다.")
-
-
 
 def wait_for_open(driver, target_time):
     
@@ -203,6 +196,7 @@ def booking_process(driver):
                 
                 time.sleep(0.2)
                 try:
+                    # 이선좌 감지 못함 오류 수정
                     alert = driver.switch_to.alert
                     print(f"이선좌 발생: {alert.text}. 재시도합니다.")
                     alert.accept()
