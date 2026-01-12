@@ -170,7 +170,10 @@ def booking_process(driver):
     while captcha_img_element:
       captcha_img_element.screenshot("captcha.png")
       result = reader.readtext("captcha.png", detail=0)
-      captcha_text = "".join(result).replace(" ", "").upper() 
+      captcha_text = "".join(result).replace(" ", "").replace('5','S').replace('0','O')\
+        .replace('1','I').replace('$','S').replace('8','B').replace(',','')\
+        .replace('€','C').replace('e','Q').replace('.','').replace('(','').replace(')','')\
+        .replace('-','').replace(':','').replace('3','S').replace('}','').upper() 
       
       print(f"인식된 보안문자: {captcha_text}")
       input_field = driver.find_element(By.XPATH, "//*[@id=\"__next\"]/div[2]/div/div/div/div/input")
