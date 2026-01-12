@@ -140,7 +140,19 @@ def wait_for_open(driver, target_time):
         now = datetime.now().strftime("%H:%M:%S")
         if now >= target_time:
             driver.find_element(By.CSS_SELECTOR, '.sideBtn.is-primary').click()
+            
+            WebDriverWait(driver, 10).until(lambda d: len(d.window_handles) > 1)
             driver.switch_to.window(driver.window_handles[-1])
+            print("예매 창으로 전환 완료")
+            
+            try:
+                time.sleep(1) 
+                iframe = driver.find_element(By.XPATH, '//*[@id="ifrmSeat"]')
+                driver.switch_to.frame(iframe)
+                print("iframe으로 전환 완료")
+            except:
+                print("iframe 없음, 현재 창에서 진행")
+            
             print(f"정각 진입 시도: {now}")
             break
         time.sleep(0.01)
