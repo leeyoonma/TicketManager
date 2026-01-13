@@ -141,7 +141,6 @@ def wait_for_open(driver, target_time):
         if now >= target_time:
             driver.find_element(By.CSS_SELECTOR, '.sideBtn.is-primary').click()
             
-            WebDriverWait(driver, 10).until(lambda d: len(d.window_handles) > 1)
             driver.switch_to.window(driver.window_handles[-1])
             print("예매 창으로 전환 완료")
             
@@ -209,13 +208,26 @@ def booking_process(driver):
 
                 driver.find_element(By.XPATH, "//*[@id=\"__next\"]/div/div/main/div[2]/aside/section/div/div[3]/button").click()
                 
-                time.sleep(0.5)
+                time.sleep(0.2)
                 try:
-                    # 이선좌 감지 못함 오류 수정
-                    alert = driver.switch_to.alert
-                    print(f"이선좌 발생: {alert.text}. 재시도합니다.")
-                    alert.accept()
-                    continue 
+                    modal = driver.find_element(By.CSS_SELECTOR, "div[role='dialog'], .modal, .popup, [class*='modal'], [class*='popup'], [class*='alert']")
+                    
+                    if modal.is_displayed():
+                        modal_text = modal.text
+                        print(f"모달 감지: {modal_text}")
+                        
+                        if any(keyword in modal_text for keyword in ["이미 선택", "선택된 좌석", "이선좌", "선점", "다른 좌석"]):
+                            print("이선좌 발생. 재시도합니다.")
+                            try:
+                                confirm_btn = modal.find_element(By.XPATH, ".//button[contains(text(), '확인') or contains(text(), '닫기') or contains(text(), 'OK')]")
+                                confirm_btn.click()
+                            except:
+                                driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
+                            time.sleep(0.2)
+                            continue
+                        else:
+                            print("좌석 선택 성공")
+                            break
                 except:
                     print("좌석 선택 성공")
                     break
