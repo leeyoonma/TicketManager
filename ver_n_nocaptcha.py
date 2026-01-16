@@ -24,7 +24,13 @@ user_credentials = {}
 def show_input_gui():
     """GUI를 통해 로그인 정보와 오픈 타임 입력받기"""
     def on_submit():
+        username = entry_username.get().strip()
+        password = entry_password.get().strip()
         open_time = entry_open_time.get().strip()
+        
+        if not username or not password or not open_time:
+            messagebox.showerror("입력 오류", "모든 필드를 입력해주세요!")
+            return
         
         # 시간 형식 검증 (HH:MM:SS)
         try:
@@ -33,6 +39,8 @@ def show_input_gui():
             messagebox.showerror("형식 오류", "시간 형식이 올바르지 않습니다!\n예: 20:00:00")
             return
         
+        user_credentials['username'] = username
+        user_credentials['password'] = password
         user_credentials['open_time'] = open_time
         
         root.destroy()
@@ -47,6 +55,20 @@ def show_input_gui():
     
     # 타이틀
     tk.Label(root, text="티켓팅 정보 입력", font=("Helvetica", 16, "bold")).pack(pady=15)
+    
+    # 아이디 입력
+    frame_username = tk.Frame(root)
+    frame_username.pack(pady=5)
+    tk.Label(frame_username, text="아이디:", width=10, anchor='e').pack(side=tk.LEFT, padx=5)
+    entry_username = tk.Entry(frame_username, width=25)
+    entry_username.pack(side=tk.LEFT)
+    
+    # 비밀번호 입력
+    frame_password = tk.Frame(root)
+    frame_password.pack(pady=5)
+    tk.Label(frame_password, text="비밀번호:", width=10, anchor='e').pack(side=tk.LEFT, padx=5)
+    entry_password = tk.Entry(frame_password, width=25, show="*")
+    entry_password.pack(side=tk.LEFT)
     
     # 오픈 타임 입력
     frame_open_time = tk.Frame(root)
@@ -72,37 +94,65 @@ def show_input_gui():
 
 def setup_driver():
     options = uc.ChromeOptions()
-
-    user_data = r"/Users/dgsw03/Library/Application Support/Google/Chrome"
-    options.add_argument(f"--user-data-dir={user_data}")
-    options.add_argument("--profile-directory=Profile 1")
     options.add_argument("--start-maximized")
     options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--no-first-run")
+    options.add_argument("--no-default-browser-check")
     
-    print("Chrome 브라우저 시작 중... (기존 Chrome을 모두 종료해주세요)")
+    print("Chrome 브라우저 시작 중...")
     driver = uc.Chrome(options=options, version_main=None, use_subprocess=True)
     print("Chrome 브라우저 시작 완료")
+    
+    # 브라우저 초기화 대기
+    time.sleep(1)
+    
+    # 윈도우가 정상적으로 열렸는지 확인
+    if len(driver.window_handles) == 0:
+        raise Exception("브라우저 창이 열리지 않았습니다.")
+    
     return driver
 
+def login_and_wait(driver, username, password):
+    driver.get("https://ticket.interpark.com/Gate/TPLogin.asp")
+    driver.find_element(By.XPATH, '//*[@id="__next"]/div/div/div/div[2]/div[1]/div/div/div/div/div[2]/button[2]').click()
+    driver.switch_to.window(driver.window_handles[-1])
+
+    userId = driver.find_element(By.XPATH, "//*[@id=\"id\"]")
+    userId.send_keys(username)
+    userPw = driver.find_element(By.XPATH, '//*[@id="pw"]')
+    userPw.send_keys(password)
+    userPw.send_keys(Keys.ENTER)
+    
+    print("로그인 처리 중...")
+
+    try: 
+      time.sleep(2)
+      userPw = driver.find_element(By.XPATH, '//*[@id="pw"]')
+      userPw.send_keys(password)
+      time.sleep(15) 
+      driver.find_element(By.XPATH, '//*[@id="log.login"]').click()
+      print("로그인 버튼 클릭")
+    except:
+      print("네이버 로그인 처리중")
+    
+    # 로그인 완료 대기 후 메인 페이지로 이동
+    time.sleep(1)
+    driver.switch_to.window(driver.window_handles[0])
+    print("로그인 성공! 메인 페이지로 이동")
+    
+    time.sleep(2)
+    print("공연 페이지로 이동 중...")
+    driver.get(TARGET_URL)
+    print("공연 페이지 진입 완료")
 
 def wait_for_open(driver, target_time):
-    print("예매 페이지로 이동 중...")
-    try:
-        driver.get("https://ticket.yes24.com/Special/56674")
-        # 페이지 로딩 대기
-        WebDriverWait(driver, 10).until(
-            lambda d: d.execute_script("return document.readyState") == "complete"
-        )
-        print("예매 페이지 로딩 완료")
-    except Exception as e:
-        print(f"페이지 로딩 오류: {e}")
-        print("수동으로 페이지를 확인하세요.")
     
     print(f"{target_time} 정각까지 대기합니다...")
     while True:
         now = datetime.now().strftime("%H:%M:%S")
         if now >= target_time:
-            driver.find_element(By.XPATH, '//*[@id="gd_norInfo"]/div[3]/a[2]').click()
+            time.sleep(0.05)
+            driver.find_element(By.CSS_SELECTOR, '.sideBtn.is-primary').click()
             
             driver.switch_to.window(driver.window_handles[-1])
             print("예매 창으로 전환 완료")
@@ -120,45 +170,45 @@ def wait_for_open(driver, target_time):
         time.sleep(0.01)
 
 def booking_process(driver):
-    reader = easyocr.Reader(['en'])
+    # reader = easyocr.Reader(['en'])
     
-    print('보안문자 대기 중...')
-    wait = WebDriverWait(driver, 30)
-    captcha_img_element = wait.until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, "img[alt*='캡챠 이미지']"))
-    )
-    print("보안문자 캡쳐 완료")
+    # print('보안문자 대기 중...')
+    # wait = WebDriverWait(driver, 3000)
+    # captcha_img_element = wait.until(
+    #     EC.presence_of_element_located((By.CSS_SELECTOR, "img[alt*='캡챠 이미지']"))
+    # )
+    # print("보안문자 캡쳐 완료")
 
-    while captcha_img_element:
-      captcha_img_element.screenshot("captcha.png")
-      result = reader.readtext("captcha.png", detail=0)
-      captcha_text = "".join(result).replace(" ", "").replace('5','S').replace('0','O')\
-        .replace('1','I').replace('$','S').replace('8','B').replace(',','')\
-        .replace('€','C').replace('e','Q').replace('.','').replace('(','').replace(')','')\
-        .replace('-','').replace(':','').replace('3','S').replace('}','').upper() 
+    # while captcha_img_element:
+    #   captcha_img_element.screenshot("captcha.png")
+    #   result = reader.readtext("captcha.png", detail=0)
+    #   captcha_text = "".join(result).replace(" ", "").replace('5','S').replace('0','O')\
+    #     .replace('1','I').replace('$','S').replace('8','B').replace(',','')\
+    #     .replace('€','C').replace('e','Q').replace('.','').replace('(','').replace(')','')\
+    #     .replace('-','').replace(':','').replace('3','S').replace('}','').upper() 
       
-      print(f"인식된 보안문자: {captcha_text}")
-      input_field = driver.find_element(By.XPATH, "//*[@id=\"__next\"]/div[2]/div/div/div/div/input")
-      input_field.clear() 
-      input_field.send_keys(captcha_text)
-      driver.find_element(By.XPATH, "//*[@id=\"__next\"]/div[2]/div/footer/button").click()
+    #   print(f"인식된 보안문자: {captcha_text}")
+    #   input_field = driver.find_element(By.XPATH, "//*[@id=\"__next\"]/div[2]/div/div/div/div/input")
+    #   input_field.clear() 
+    #   input_field.send_keys(captcha_text)
+    #   driver.find_element(By.XPATH, "//*[@id=\"__next\"]/div[2]/div/footer/button").click()
       
-      # 처리 결과 대기
-      time.sleep(0.2)
+    #   # 처리 결과 대기
+    #   time.sleep(0.2)
       
-      try:
-          error_msg = driver.find_element(By.XPATH, '//*[@id="__next"]/div[2]/div/div/div/div/div[2]')
-          if error_msg.is_displayed() or len(captcha_text) != 6:
-              print("보안문자 오류, 재시도합니다.")
-              driver.find_element(By.XPATH, '//*[@id="__next"]/div[2]/div/div/div/div/div[1]/button[2]').click()
-              time.sleep(0.5)
-              captcha_img_element = wait.until(
-                  EC.presence_of_element_located((By.CSS_SELECTOR, "img[alt*='캡챠 이미지']"))
-              )
-              continue
-      except:
-          print(f"보안문자 입력 완료: {captcha_text}")
-          break
+    #   try:
+    #       error_msg = driver.find_element(By.XPATH, '//*[@id="__next"]/div[2]/div/div/div/div/div[2]')
+    #       if error_msg.is_displayed() or len(captcha_text) != 6:
+    #           print("보안문자 오류, 재시도합니다.")
+    #           driver.find_element(By.XPATH, '//*[@id="__next"]/div[2]/div/div/div/div/div[1]/button[2]').click()
+    #           time.sleep(0.5)
+    #           captcha_img_element = wait.until(
+    #               EC.presence_of_element_located((By.CSS_SELECTOR, "img[alt*='캡챠 이미지']"))
+    #           )
+    #           continue
+    #   except:
+    #       print(f"보안문자 입력 완료: {captcha_text}")
+    #       break
     
     while True:
         try:
@@ -204,27 +254,29 @@ def booking_process(driver):
 
 
 # --- 실행 ---
-if __name__ == '__main__':
-    print("="*50)
-    print("인터파크 티켓팅 자동화 프로그램")
-    print("="*50)
+print("="*50)
+print("인터파크 티켓팅 자동화 프로그램")
+print("="*50)
 
-    credentials = show_input_gui()
+credentials = show_input_gui()
 
-    if not credentials:
-        print("프로그램이 취소되었습니다.")
-        exit()
+if not credentials:
+    print("프로그램이 취소되었습니다.")
+    exit()
 
-    open_time = credentials['open_time']
+username = credentials['username']
+password = credentials['password']
+open_time = credentials['open_time']
 
-    print(f"\n설정된 오픈 타임: {open_time}")
-    print("브라우저를 실행합니다...\n")
+print(f"\n설정된 오픈 타임: {open_time}")
+print("브라우저를 실행합니다...\n")
 
-    driver = setup_driver()
-    try:
-        wait_for_open(driver, open_time)
-        booking_process(driver)
-    finally:
-        # 프로그램 종료 시 창이 바로 닫히지 않게 대기
-        input("티켓팅이 완료되었나요? 엔터를 누르면 종료됩니다.")
-        driver.quit()
+driver = setup_driver()
+try:
+    login_and_wait(driver, username, password)
+    wait_for_open(driver, open_time)
+    booking_process(driver)
+finally:
+    # 프로그램 종료 시 창이 바로 닫히지 않게 대기
+    input("티켓팅이 완료되었나요? 엔터를 누르면 종료됩니다.")
+    driver.quit()
